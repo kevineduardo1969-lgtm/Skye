@@ -39,11 +39,15 @@ export default function AuthGate({onReady}) {
     setBusy(true);
     try {
       const result = teacherAction === 'register'
-        ? await supabase.auth.signUp({email:email.trim(), password})
+        ? await supabase.auth.signUp({
+          email:email.trim(),
+          password,
+          options:{emailRedirectTo:window.location.origin},
+        })
         : await supabase.auth.signInWithPassword({email:email.trim(), password});
       if (result.error) throw result.error;
       if (!result.data.session) {
-        setMessage('Revisa tu correo para confirmar la cuenta y después inicia sesión.');
+        setMessage('Cuenta creada. Revisa tu correo, confirma el acceso y luego vuelve aquí para iniciar sesión.');
         return;
       }
       const {error} = await supabase.rpc('bootstrap_teacher_profile');

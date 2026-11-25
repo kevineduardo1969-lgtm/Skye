@@ -10,6 +10,12 @@ const allowedExtensions = new Set(['txt', 'csv', 'docx', 'pdf']);
 function extensionOf(path: string) { return path.split('.').pop()?.toLowerCase() || ''; }
 function cleanText(value: string) { return value.replace(/\s+/g, ' ').trim().slice(0, 12000); }
 function decodeXml(value: string) { return value.replace(/<w:tab\/>/g, ' ').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }
+function normalizeOpenAiKey(value: string) {
+  // Al pegar secretos desde un correo o documento pueden colarse comillas o caracteres invisibles.
+  // Las claves de OpenAI solo contienen caracteres ASCII seguros para un encabezado HTTP.
+  const extracted = value.match(/sk-[A-Za-z0-9_-]+/g)?.[0];
+  return (extracted || value).replace(/[^\x20-\x7E]/g, '').trim();
+}
 
 async function extractText(file: Uint8Array, extension: string) {
   if (extension === 'txt' || extension === 'csv') return cleanText(textDecoder.decode(file));
@@ -49,7 +55,7 @@ Deno.serve(async request => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const openaiKey = (Deno.env.get('OPENAI_API_KEY') || '').trim();
+    const openaiKey = normalizeOpenAiKey(Deno.env.get('OPENAI_API_KEY') || '');
     if (!supabaseUrl || !anonKey || !serviceKey) throw new Error('La función no tiene la configuración de Supabase necesaria.');
     if (!openaiKey) return json({error:'La generación con IA aún no está configurada. Pide a la administración del proyecto que agregue el secreto de IA en la Edge Function.'}, 503);
     const caller = createClient(supabaseUrl, anonKey, {global:{headers:{Authorization:authorization}}});
@@ -75,7 +81,13 @@ Deno.serve(async request => {
     if (material.length < 30) { if (generationId) await admin.from('ai_challenge_generations').update({status:'error', completed_at:new Date().toISOString()}).eq('id', generationId); return json({error:'El archivo tiene muy poco texto legible para crear borradores útiles.'}, 422); }
     const prompt = `Convierte el siguiente material didáctico en entre 1 y 5 BORRADORES editables de retos para quinto de primaria (10-11 años). Prioriza pensamiento computacional y lógico-matemático: descomposición, patrones, secuenciación, pensamiento algorítmico, análisis de datos, toma de decisiones, divisiones, fracciones, decimales o proporcionalidad. Usa español claro, amable y apropiado. No incluyas nombres, calificaciones, datos personales, contenido sensible ni programación avanzada. Para multiple-choice y multi-select, answer debe contener exactamente el texto de una o varias opciones. Para numeric, answer contiene una respuesta numérica. Para order, answer contiene los pasos en el orden correcto. No expliques que eres IA. Material:\n\n${material}`;
     const response = await fetch('https://api.openai.com/v1/responses', {method:'POST', headers:{'Authorization':`Bearer ${openaiKey}`, 'Content-Type':'application/json'}, body:JSON.stringify({model:Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini', store:false, input:[{role:'system', content:'Genera solamente propuestas educativas seguras y estructuradas.'},{role:'user', content:prompt}], text:{format:{type:'json_schema', name:'skye_challenge_drafts', strict:true, schema:proposalSchema}}})});
-    if (!response.ok) throw new Error(`La IA no respondió correctamente (${response.status}).`);
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('OpenAI request failed', response.status, detail.slice(0, 500));
+      if (response.status === 401) throw new Error('La clave de IA no fue aceptada. Revisa el secreto OPENAI_API_KEY de la Edge Function.');
+      if (response.status === 429) throw new Error('La cuenta de IA alcanzó su límite o no tiene saldo disponible. Revisa la facturación de la cuenta de IA.');
+      throw new Error(`La IA no respondió correctamente (${response.status}). Revisa los registros de la función.`);
+    }
     const result = await response.json();
     const parsed = JSON.parse(result.output_text || '{}');
     const proposals = Array.isArray(parsed.proposals) ? parsed.proposals.slice(0, 5) : [];

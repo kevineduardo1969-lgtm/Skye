@@ -33,7 +33,16 @@ export default function TeacherMaterialDraft({teacherId, groups}) {
   const generate = async () => {
     if (!path || !supabase) return;
     setStatus('generating'); setMessage('El backend está leyendo el material y preparando propuestas…');
-    try { const {data, error} = await supabase.functions.invoke('generate-challenge-drafts', {body:{path, sourceName:file?.name || ''}}); if (error) throw error; if (!data?.proposals?.length) throw new Error(data?.error || 'No se generaron borradores revisables.'); setProposals(data.proposals); setStatus('ready'); setMessage('Las propuestas están listas para tu revisión. Ninguna se ha publicado.'); } catch (error) { setStatus('ready'); setMessage(error.message || friendlyError(error)); }
+    try {
+      const {data, error} = await supabase.functions.invoke('generate-challenge-drafts', {body:{path, sourceName:file?.name || ''}});
+      if (error) {
+        const response = error.context;
+        const payload = response && typeof response.json === 'function' ? await response.json().catch(() => null) : null;
+        throw new Error(payload?.error || friendlyError(error));
+      }
+      if (!data?.proposals?.length) throw new Error(data?.error || 'No se generaron borradores revisables.');
+      setProposals(data.proposals); setStatus('ready'); setMessage('Las propuestas están listas para tu revisión. Ninguna se ha publicado.');
+    } catch (error) { setStatus('ready'); setMessage(error.message || friendlyError(error)); }
   };
   const remove = async () => {
     if (path && supabase) { if (!window.confirm('¿Eliminar este material privado? No se podrá recuperar desde Skye.')) return; setStatus('uploading'); try { const {error} = await supabase.storage.from('teacher-materials').remove([path]); if (error) throw error; } catch (error) { setStatus('ready'); setMessage(friendlyError(error)); return; } }
@@ -42,4 +51,3 @@ export default function TeacherMaterialDraft({teacherId, groups}) {
 
   return <section className="material-draft"><div><p className="eyebrow">ASISTENTE DE RETOS · REVISIÓN DOCENTE</p><h4>Crear borrador desde archivo</h4><p>Sube material didáctico para revisarlo de forma privada. La IA propone borradores; tú los corriges y decides si guardarlos.</p></div><p className="privacy-notice" role="note">🔒 <b>No subas nombres, calificaciones ni datos personales de estudiantes.</b></p><label className="file-picker">Selecciona un archivo (.txt, .csv, .docx o .pdf, máximo 5 MB)<input type="file" accept=".txt,.csv,.docx,.pdf,text/plain,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={choose}/></label>{file && <section className="material-review" aria-live="polite"><div className="material-file"><span>📄</span><div><b>{file.name}</b><small>{detected?.type} · {detected?.bytes}</small></div><em>{status === 'uploading' || status === 'generating' ? 'Procesando…' : path ? 'Privado y listo' : 'Listo para revisar'}</em></div><div className="detected-content"><b>Contenido detectado</b><pre>{sample}</pre></div><div className="material-actions">{!path && <button type="button" className="primary" disabled={!canUpload} onClick={upload}>{status === 'uploading' ? 'Procesando…' : 'Subir material privado'}</button>}{path && <button type="button" className="primary" disabled={status === 'generating'} onClick={generate}>{status === 'generating' ? 'Generando borradores…' : 'Generar borradores con IA'}</button>}<button type="button" className="filter-reset" disabled={status === 'uploading' || status === 'generating'} onClick={remove}>{path ? 'Eliminar archivo' : 'Quitar archivo'}</button></div></section>}{message && <p className="auth-message" role="status">{message}</p>}{proposals.length > 0 && <AiProposalReview proposals={proposals} groups={groups} teacherId={teacherId} onEmpty={() => setProposals([])}/>}</section>;
 }
-

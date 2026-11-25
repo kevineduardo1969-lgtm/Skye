@@ -1,9 +1,10 @@
 import React from 'react';
 import {exercises, modules} from '../data/exercises';
 
-export default function ProgressReport({stars, done, badges, summary, performance, evidenceRows = [], loading, go, onReset, identity, onSignOut}) {
-  const completed = exercises.filter(exercise => done.includes(exercise.id));
-  const attempted = exercises.filter(exercise => performance[exercise.id]?.attempts);
+export default function ProgressReport({stars, done, badges, summary, performance, evidenceRows = [], loading, go, onReset, identity, onSignOut, teacherChallenges = []}) {
+  const allExercises = [...exercises, ...teacherChallenges];
+  const completed = allExercises.filter(exercise => done.includes(exercise.id));
+  const attempted = allExercises.filter(exercise => performance[exercise.id]?.attempts);
   const hints = Object.values(performance).reduce((total, item) => total + (item.hints || 0), 0);
   const mostAttempts = [...attempted].sort((a,b) => (performance[b.id].attempts || 0) - (performance[a.id].attempts || 0)).slice(0,3);
   const workedModules = modules.filter(module => attempted.some(exercise => exercise.module === module.id) || completed.some(exercise => exercise.module === module.id));
@@ -15,7 +16,7 @@ export default function ProgressReport({stars, done, badges, summary, performanc
   const latestActivity = evidenceRows[evidenceRows.length - 1]?.created_at;
   const moduleEvidence = modules.map(module => {
     const rows = evidenceRows.filter(row => row.module_id === module.id);
-    const moduleExercises = exercises.filter(exercise => exercise.module === module.id);
+    const moduleExercises = allExercises.filter(exercise => exercise.module === module.id);
     const solved = moduleExercises.filter(exercise => done.includes(exercise.id)).length;
     const tried = new Set([...rows.map(row => row.exercise_id), ...moduleExercises.filter(exercise => performance[exercise.id]?.attempts).map(exercise => exercise.id)]).size;
     const moduleAttempts = moduleExercises.reduce((total, exercise) => total + (performance[exercise.id]?.attempts || 0), 0);

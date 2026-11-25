@@ -3,14 +3,14 @@ import React, {Component, useEffect, useMemo, useState} from 'react';
 const normalize = value => String(value).trim().replace(',', '.').toLowerCase();
 const labels = {inicio:'Inicio', práctica:'Práctica', desafío:'Desafío'};
 
-function ExerciseEngineContent({moduleId, exercises, completedIds, onComplete, onAttempt, onHint, onStart}) {
+function ExerciseEngineContent({moduleId, exercises, completedIds, onComplete, onAttempt, onHint, onStart, initialExerciseId}) {
   const moduleExercises = useMemo(() => exercises.filter(exercise => exercise.module === moduleId), [exercises, moduleId]);
   const [index, setIndex] = useState(0);
   const [message, setMessage] = useState('');
   const [showHint, setShowHint] = useState(false);
   const exercise = moduleExercises[index];
 
-  useEffect(() => { setIndex(0); setMessage(''); setShowHint(false); }, [moduleId]);
+  useEffect(() => { const target = moduleExercises.findIndex(item => item.id === initialExerciseId); setIndex(target >= 0 ? target : 0); setMessage(''); setShowHint(false); }, [moduleId, initialExerciseId, moduleExercises]);
   useEffect(() => { if (exercise) onStart?.(exercise); }, [exercise?.id]);
   if (!exercise) return null;
 
@@ -28,7 +28,7 @@ function ExerciseEngineContent({moduleId, exercises, completedIds, onComplete, o
 
   return <section className={exercise.type === 'robot' ? 'robot-task' : 'task'}>
     <ExerciseNavigation exercises={moduleExercises} index={index} completedIds={completedIds} onSelect={selectExercise}/>
-    <div className="exercise-meta"><span className={`level ${exercise.difficulty}`}>{labels[exercise.difficulty]}</span><span>{exercise.skill}</span><span>⭐ {exercise.stars}</span></div>
+    <div className="exercise-meta"><span className={`level ${exercise.difficulty}`}>{labels[exercise.difficulty]}</span>{exercise.source === 'teacher' && <span className="teacher-source">Reto de tu grupo</span>}<span>{exercise.skill}</span><span>⭐ {exercise.stars}</span></div>
     <><ExerciseRenderer key={exercise.id} exercise={exercise} onValidate={finish}/><div className="hint-area">{showHint && <p className="hint">💡 <b>Pista:</b> {exercise.hint}</p>}<button type="button" className="hint-button" onClick={()=>{if(!showHint) onHint(exercise); setShowHint(value=>!value)}}>{showHint ? 'Ocultar pista' : 'Ver pista'}</button></div></>
     {message && <Feedback good={message.good} text={message.text}/>} 
   </section>;

@@ -49,7 +49,7 @@ Deno.serve(async request => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
+    const openaiKey = (Deno.env.get('OPENAI_API_KEY') || '').trim();
     if (!supabaseUrl || !anonKey || !serviceKey) throw new Error('La función no tiene la configuración de Supabase necesaria.');
     if (!openaiKey) return json({error:'La generación con IA aún no está configurada. Pide a la administración del proyecto que agregue el secreto de IA en la Edge Function.'}, 503);
     const caller = createClient(supabaseUrl, anonKey, {global:{headers:{Authorization:authorization}}});
@@ -87,4 +87,3 @@ Deno.serve(async request => {
     return json({error:error instanceof Error ? error.message : 'No pudimos generar borradores en este momento.'}, 500);
   }
 });
-
